@@ -10,6 +10,7 @@ import traceback
 import typing
 
 import discord
+from discord.utils import get
 import jsonpickle
 import openai
 from discord import state as discord_state
@@ -20,6 +21,8 @@ OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # https://beta.o
 OPENAI_ORGANIZATION = "org-XXXXXXXXXXXXXXXXXXXXXXXX"
 PREFIX = '.'
 CLEANUP = 60
+VERIFY_CHANNEL = 000000000
+VERIFIED_ROLE = 000000000
 ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
 MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
 ALLOWED_GUILD = 714501525455634453  # Yannic Kilcher
@@ -340,6 +343,13 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
 
     @client.event
     async def on_message(message: discord.Message):
+
+        # verify foles function
+        if message.channel.id == VERIFY_CHANNEL:
+            await message.author.add_roles(get(message.guild.roles, id=VERIFIED_ROLE))
+            await message.delete(delay=1)
+            return
+
         fn_name = message.content[1:]
 
         if ' ' in fn_name:
