@@ -21,6 +21,7 @@ OPENAI_ORGANIZATION = "org-XXXXXXXXXXXXXXXXXXXXXXXX"
 PREFIX = '.'
 CLEANUP = 60
 VERIFY_CHANNEL = 000000000
+VERIFY_MESSAGE = '.vefify'
 VERIFIED_ROLE = 000000000
 ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
 MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
@@ -345,9 +346,10 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
 
         # verify foles function
         if message.channel.id == VERIFY_CHANNEL:
-            await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
-            await message.delete(delay=1)
-            return
+            if message.content == VERIFY_MESSAGE:
+                await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
+                await message.delete(delay=1)
+                return
 
         fn_name = message.content[1:]
 
