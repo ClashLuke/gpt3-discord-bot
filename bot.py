@@ -348,8 +348,8 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
         if message.channel.id == VERIFY_CHANNEL:
             if message.content == VERIFY_MESSAGE:
                 await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
-                await message.delete(delay=1)
-                return
+            await message.delete(delay=1)
+            return
 
         fn_name = message.content[1:]
 
