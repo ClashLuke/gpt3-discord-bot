@@ -10,7 +10,6 @@ import traceback
 import typing
 
 import discord
-from discord.utils import get
 import jsonpickle
 import openai
 from discord import state as discord_state
@@ -346,7 +345,7 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
 
         # verify foles function
         if message.channel.id == VERIFY_CHANNEL:
-            await message.author.add_roles(get(message.guild.roles, id=VERIFIED_ROLE))
+            await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
             await message.delete(delay=1)
             return
 
