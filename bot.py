@@ -93,7 +93,7 @@ async def complete(client: discord.Client, message: discord.Message, sources: di
 
     
 async def verify(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    if message.channel.id == VERIFY_CHANNEL and message.content == VERIFY_MESSAGE:
+    if message.channel.id == VERIFY_CHANNEL:
         await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
         await message.delete(delay=1)
     
@@ -332,7 +332,7 @@ COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 
             'dump_settings':  dump_settings, 'load_settings': load_settings,
             'dump_fallbacks': dump_fallbacks, 'load_fallbacks': load_fallbacks, 'add_fallback': add_fallback,
             'delete':         delete, 'role': role,
-            'restart': restart
+            'restart': restart, 'verify': verify
             }
 
 
