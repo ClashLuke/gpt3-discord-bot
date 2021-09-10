@@ -20,6 +20,8 @@ OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # https://beta.o
 OPENAI_ORGANIZATION = "org-XXXXXXXXXXXXXXXXXXXXXXXX"
 PREFIX = '.'
 CLEANUP = 60
+VERIFY_CHANNEL = 885760989608431636  # Yannic Kilcher "_verification"
+VERIFIED_ROLE = 821375158295592961  # Yannic Kilcher "verified"
 ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
 MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
 ALLOWED_GUILD = 714501525455634453  # Yannic Kilcher
@@ -86,9 +88,15 @@ async def complete(client: discord.Client, message: discord.Message, sources: di
     channel: discord.TextChannel = message.channel
     await channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
                        reference=message)
-    return
     # await basic_check(message, True)
     # await channel.send(call_gpt(message.content[len('.complete '):], settings))
+
+    
+async def verify(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
+    if message.channel.id == VERIFY_CHANNEL and message.content == VERIFY_MESSAGE:
+        await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
+        await message.delete(delay=1)
+    
 
 
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -152,6 +160,7 @@ async def add_fallback(client: discord.Client, message: discord.Message, sources
     await channel.send(f"Added query to the fallback list. There are now {len(FALLBACKS)} queries in said list.",
                        reference=message)
 
+         
 async def restart(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
     await basic_check(message, True)
@@ -162,6 +171,7 @@ async def restart(client: discord.Client, message: discord.Message, sources: dic
 
     os.system("python3 bot.py")
     os.kill(os.getppid(), signal.SIGTERM)
+
 
 async def settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
