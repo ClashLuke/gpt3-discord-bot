@@ -14,7 +14,6 @@ import jsonpickle
 import openai
 from discord import state as discord_state
 
-
 DISCORD_TOKEN = "XXXXXXXXXXXXXXXXXXXXXXXX.XXXXXX.XXXXXXXXXXXXXXX-XXXXXXXXXXX"  # Get one here: https://discord.com/developers/applications/
 OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # https://beta.openai.com/account/api-keys
 OPENAI_ORGANIZATION = "org-XXXXXXXXXXXXXXXXXXXXXXXX"
@@ -91,12 +90,12 @@ async def complete(client: discord.Client, message: discord.Message, sources: di
     # await basic_check(message, True)
     # await channel.send(call_gpt(message.content[len('.complete '):], settings))
 
-    
+
 async def verify(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     if message.channel.id == VERIFY_CHANNEL:
         await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
         await message.delete(delay=1)
-    
+
 
 
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -165,8 +164,7 @@ async def restart(client: discord.Client, message: discord.Message, sources: dic
     channel: discord.TextChannel = message.channel
     await basic_check(message, True)
 
-    await channel.send(f"Restarting",
-                       reference=message)
+    await channel.send(f"Restarting", reference=message)
     await dump_queue(client, message, sources, settings)
 
     os.system("python3 bot.py")
@@ -177,7 +175,8 @@ async def settings(client: discord.Client, message: discord.Message, sources: di
     channel: discord.TextChannel = message.channel
     await channel.send(''.join(["gpt3:\n\t", '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['gpt3'].items()])),
                                 '\n'
-                                'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['bot'].items()]))]))
+                                'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['bot'].items()]))]),
+                       reference=message)
 
 
 async def dump_queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -324,7 +323,7 @@ async def change_setting(client: discord.Client, message: discord.Message, sourc
     group_name, parameter_name, value = arguments
     previous_value = settings[group_name][parameter_name]
     settings[group_name][parameter_name] = type(previous_value)(value)
-    await channel.send(f"Changed {parameter_name} from {previous_value} to {value}", message)
+    await channel.send(f"Changed {parameter_name} from {previous_value} to {value}", reference=message)
 
 
 COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 'complete': complete,
@@ -337,7 +336,7 @@ COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 
 
 
 async def bot_help(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await message.channel.send(f'Available Commands: `{"` `".join(sorted(list(COMMANDS.keys())))}`')
+    await message.channel.send(f'Available Commands: `{"` `".join(sorted(list(COMMANDS.keys())))}`', reference=message)
 
 
 COMMANDS['help'] = bot_help
@@ -431,8 +430,8 @@ if __name__ == '__main__':
                   'best_of':           1,
                   'engine':            "davinci"
                   })
-    _bot.update({'min_response_time': 300.,
-                 'max_response_time': 600. * 24,
+    _bot.update({'min_response_time': 60,
+                 'max_response_time': 60 * 60 * 24,
                  "started":           0,
                  'min_score':         0,
                  'show_no_score':     0,
