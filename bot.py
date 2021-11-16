@@ -88,8 +88,12 @@ async def basic_check(message: discord.Message, permission, dm=False):
 
 async def prune(message: discord.Message):
     channel: discord.TextChannel = message.guild.get_channel(SHITPOSTING_CHANNEL)
-    async for msg in channel.history(limit=None, before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
-        await msg.delete()
+    async for msg in channel.history(limit=None,
+                                     before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
+        try:
+            await msg.delete()
+        except discord.errors.NotFound:
+            pass
 
 
 async def complete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -373,6 +377,7 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             local_check(message.id % len(available_workers) != available_workers.index(idx), f"Not mine {idx}")
         except ExitFunctionException:
             return
+
         handled_messages[message.id] = time.time()
         available_workers.remove(idx)
 
