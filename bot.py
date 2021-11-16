@@ -52,7 +52,7 @@ def debug(message: typing.Any):
         print(message)
 
 
-def discord_check(check: bool, message: discord.Message, response: str):
+async def discord_check(check: bool, message: discord.Message, response: str):
     if check:
         channel: discord.TextChannel = message.channel
         await channel.send(response, reference=message)
@@ -70,27 +70,27 @@ def call_gpt(prompt, settings):
     return openai.Completion.create(prompt=prompt, **settings['gpt3'])['choices'][0]['text']
 
 
-def basic_check(message: discord.Message, permission, dm=False):
+async def basic_check(message: discord.Message, permission, dm=False):
     channel: discord.TextChannel = message.channel
-    discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
-    discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
+    await discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
+    await discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
     if not dm:
         guild: discord.Guild = channel.guild
-        discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
-                            "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                            "\"Yannic Kilcher\" discord server.")
+        await discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+                      "Insufficient permission. This bot can only be used in its dedicated channel on the "
+                      "\"Yannic Kilcher\" discord server.")
     if permission:
         author: discord.User = message.author
-        discord_check(author.id not in ADMIN_USER, message,
-                            "Insufficient permission. Only the owners of this bot are allowed to run this command. "
-                            "Try .add instead")
+        await discord_check(author.id not in ADMIN_USER, message,
+                      "Insufficient permission. Only the owners of this bot are allowed to run this command. "
+                      "Try .add instead")
 
 
 async def complete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
     await channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
                        reference=message)
-    # basic_check(message, True)
+    # await basic_check(message, True)
     # await channel.send(call_gpt(message.content[len('.complete '):], settings))
 
 
@@ -101,7 +101,7 @@ async def verify(client: discord.Client, message: discord.Message, sources: dict
 
 
 async def prune(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, True)
+    await basic_check(message, True)
     server: discord.Guild = message.guild
     channel: discord.TextChannel = server.get_channel(SHITPOSTING_CHANNEL)
     now = datetime.datetime.now()
@@ -109,12 +109,13 @@ async def prune(client: discord.Client, message: discord.Message, sources: dict,
         msg: discord.Message = msg
         created_at: datetime.datetime = msg.created_at
         if created_at > now + datetime.timedelta(days=PRUNING_DAYS):
+            print(msg.content, created_at)
+            input()
             await msg.delete()
 
 
-
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, False, True)
+    await basic_check(message, False, True)
 
     query = message.content[len('.add '):]
     author_id = message.author.id
@@ -128,7 +129,7 @@ async def add(client: discord.Client, message: discord.Message, sources: dict, s
 
 
 async def delete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, False, True)
+    await basic_check(message, False, True)
     channel: discord.TextChannel = message.channel
     query = message.content[len('.delete '):]
     author_id = message.author.id
@@ -145,7 +146,7 @@ async def delete(client: discord.Client, message: discord.Message, sources: dict
 
 
 async def role(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, False)
+    await basic_check(message, False)
     query = message.content[len('.role '):]
     channel: discord.TextChannel = message.channel
     if query in ROLES:
@@ -166,7 +167,7 @@ async def role(client: discord.Client, message: discord.Message, sources: dict, 
 
 async def add_fallback(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    basic_check(message, True)
+    await basic_check(message, True)
 
     query = message.content[len('.add_fallback '):]
     FALLBACKS.append(query)
@@ -177,7 +178,7 @@ async def add_fallback(client: discord.Client, message: discord.Message, sources
 
 async def restart(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    basic_check(message, True)
+    await basic_check(message, True)
 
     await channel.send(f"Restarting", reference=message)
     await dump_queue(client, message, sources, settings)
@@ -195,7 +196,7 @@ async def settings(client: discord.Client, message: discord.Message, sources: di
 
 
 async def dump_queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, True)
+    await basic_check(message, True)
     with open("queue_dump.json", 'w') as f:
         f.write(jsonpickle.dumps(dict(sources), indent=4))
     channel: discord.TextChannel = message.channel
@@ -203,7 +204,7 @@ async def dump_queue(client: discord.Client, message: discord.Message, sources: 
 
 
 async def dump_settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, True)
+    await basic_check(message, True)
     with open("setting_dump.json", 'w') as f:
         f.write(jsonpickle.dumps({key: dict(val) for key, val in settings.items()}, indent=4))
     channel: discord.TextChannel = message.channel
@@ -211,7 +212,7 @@ async def dump_settings(client: discord.Client, message: discord.Message, source
 
 
 async def dump_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, True)
+    await basic_check(message, True)
     with open("fallbacks.json", 'w') as f:
         f.write(jsonpickle.dumps(FALLBACKS, indent=4))
     channel: discord.TextChannel = message.channel
@@ -219,7 +220,7 @@ async def dump_fallbacks(client: discord.Client, message: discord.Message, sourc
 
 
 async def load_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    basic_check(message, True)
+    await basic_check(message, True)
     with open("fallbacks.json", 'w') as f:
         fallbacks = jsonpickle.loads(f.read())
     FALLBACKS.clear()
@@ -234,7 +235,7 @@ async def load_settings(client: discord.Client, message: discord.Message, source
     for top_key, top_val in tmp.items():
         for key, val in top_val.items():
             settings[top_key][key] = val
-    basic_check(message, True)
+    await basic_check(message, True)
     channel: discord.TextChannel = message.channel
     await channel.send("Loaded settings.", reference=message)
 
@@ -244,7 +245,7 @@ async def load_queue(client: discord.Client, message: discord.Message, sources: 
         tmp = jsonpickle.loads(f.read())
     for key, val in tmp.items():
         sources[key] = val
-    basic_check(message, True)
+    await basic_check(message, True)
     channel: discord.TextChannel = message.channel
     await channel.send("Loaded queue.", reference=message)
 
@@ -278,17 +279,17 @@ async def queue(client: discord.Client, message: discord.Message, sources: dict,
 
 async def start(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    discord_check(settings['bot']['started'], message, "Not starting another thread.")
-    discord_check(not hasattr(channel, "guild"), message, "The bot can't be used in DM.")
+    await discord_check(settings['bot']['started'], message, "Not starting another thread.")
+    await discord_check(not hasattr(channel, "guild"), message, "The bot can't be used in DM.")
 
     guild: discord.Guild = channel.guild
     author: discord.User = message.author
-    discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
-                        "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                        "\"Yannic Kilcher\" discord server.")
-    discord_check(author.id not in ADMIN_USER, message,
-                        "Insufficient permission. Only the owner of this bot is allowed to run this command. "
-                        "Try .add instead")
+    await discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+                  "Insufficient permission. This bot can only be used in its dedicated channel on the "
+                  "\"Yannic Kilcher\" discord server.")
+    await discord_check(author.id not in ADMIN_USER, message,
+                  "Insufficient permission. Only the owner of this bot is allowed to run this command. "
+                  "Try .add instead")
     settings['bot']['started'] = 1
     await channel.send("Starting the listener for this channel.", reference=message)
 
@@ -333,10 +334,10 @@ async def change_setting(client: discord.Client, message: discord.Message, sourc
     channel: discord.TextChannel = message.channel
     author: discord.User = message.author
     arguments = message.content.split(' ')[1:]
-    discord_check(len(arguments) != 3, message,
-                        "Invalid number of arguments. Should be `group_name parameter_name value`")
-    discord_check(author.id not in ADMIN_USER, message,
-                        "Invalid number of arguments. Should be `group_name parameter_name value`")
+    await discord_check(len(arguments) != 3, message,
+                  "Invalid number of arguments. Should be `group_name parameter_name value`")
+    await discord_check(author.id not in ADMIN_USER, message,
+                  "Invalid number of arguments. Should be `group_name parameter_name value`")
     group_name, parameter_name, value = arguments
     previous_value = settings[group_name][parameter_name]
     settings[group_name][parameter_name] = type(previous_value)(value)
