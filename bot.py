@@ -77,13 +77,19 @@ async def basic_check(message: discord.Message, permission, dm=False):
     if not dm:
         guild: discord.Guild = channel.guild
         await discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
-                      "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                      "\"Yannic Kilcher\" discord server.")
+                            "Insufficient permission. This bot can only be used in its dedicated channel on the "
+                            "\"Yannic Kilcher\" discord server.")
     if permission:
         author: discord.User = message.author
         await discord_check(author.id not in ADMIN_USER, message,
-                      "Insufficient permission. Only the owners of this bot are allowed to run this command. "
-                      "Try .add instead")
+                            "Insufficient permission. Only the owners of this bot are allowed to run this command. "
+                            "Try .add instead")
+
+
+async def prune(message: discord.Message):
+    channel: discord.TextChannel = message.guild.get_channel(SHITPOSTING_CHANNEL)
+    async for msg in channel.history(limit=None, before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
+        await msg.delete()
 
 
 async def complete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -98,20 +104,6 @@ async def verify(client: discord.Client, message: discord.Message, sources: dict
     if message.channel.id == VERIFY_CHANNEL:
         await message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE))
         await message.delete(delay=1)
-
-
-async def prune(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
-    server: discord.Guild = message.guild
-    channel: discord.TextChannel = server.get_channel(SHITPOSTING_CHANNEL)
-    now = datetime.datetime.now()
-    async for msg in channel.history(limit=None):
-        msg: discord.Message = msg
-        created_at: datetime.datetime = msg.created_at
-        if created_at > now + datetime.timedelta(days=PRUNING_DAYS):
-            print(msg.content, created_at)
-            input()
-            await msg.delete()
 
 
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -285,11 +277,11 @@ async def start(client: discord.Client, message: discord.Message, sources: dict,
     guild: discord.Guild = channel.guild
     author: discord.User = message.author
     await discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
-                  "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                  "\"Yannic Kilcher\" discord server.")
+                        "Insufficient permission. This bot can only be used in its dedicated channel on the "
+                        "\"Yannic Kilcher\" discord server.")
     await discord_check(author.id not in ADMIN_USER, message,
-                  "Insufficient permission. Only the owner of this bot is allowed to run this command. "
-                  "Try .add instead")
+                        "Insufficient permission. Only the owner of this bot is allowed to run this command. "
+                        "Try .add instead")
     settings['bot']['started'] = 1
     await channel.send("Starting the listener for this channel.", reference=message)
 
@@ -326,7 +318,7 @@ async def start(client: discord.Client, message: discord.Message, sources: dict,
         delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
         print(f"Next delay: {int(delay / 60):3d} minutes")
         start_time = time.time()
-        await prune(client, message, sources, settings)
+        await prune(message)
         time.sleep(delay + start_time - time.time())  # Ensure delay stays the same
 
 
@@ -335,9 +327,9 @@ async def change_setting(client: discord.Client, message: discord.Message, sourc
     author: discord.User = message.author
     arguments = message.content.split(' ')[1:]
     await discord_check(len(arguments) != 3, message,
-                  "Invalid number of arguments. Should be `group_name parameter_name value`")
+                        "Invalid number of arguments. Should be `group_name parameter_name value`")
     await discord_check(author.id not in ADMIN_USER, message,
-                  "Invalid number of arguments. Should be `group_name parameter_name value`")
+                        "Invalid number of arguments. Should be `group_name parameter_name value`")
     group_name, parameter_name, value = arguments
     previous_value = settings[group_name][parameter_name]
     settings[group_name][parameter_name] = type(previous_value)(value)
