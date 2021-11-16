@@ -52,7 +52,7 @@ def debug(message: typing.Any):
         print(message)
 
 
-async def discord_check(check: bool, message: discord.Message, response: str):
+def discord_check(check: bool, message: discord.Message, response: str):
     if check:
         channel: discord.TextChannel = message.channel
         await channel.send(response, reference=message)
@@ -72,16 +72,16 @@ def call_gpt(prompt, settings):
 
 def basic_check(message: discord.Message, permission, dm=False):
     channel: discord.TextChannel = message.channel
-    await discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
-    await discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
+    discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
+    discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
     if not dm:
         guild: discord.Guild = channel.guild
-        await discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+        discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
                             "Insufficient permission. This bot can only be used in its dedicated channel on the "
                             "\"Yannic Kilcher\" discord server.")
     if permission:
         author: discord.User = message.author
-        await discord_check(author.id not in ADMIN_USER, message,
+        discord_check(author.id not in ADMIN_USER, message,
                             "Insufficient permission. Only the owners of this bot are allowed to run this command. "
                             "Try .add instead")
 
@@ -110,6 +110,7 @@ async def prune(client: discord.Client, message: discord.Message, sources: dict,
         created_at: datetime.datetime = msg.created_at
         if created_at > now + datetime.timedelta(days=PRUNING_DAYS):
             await msg.delete()
+
 
 
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -277,15 +278,15 @@ async def queue(client: discord.Client, message: discord.Message, sources: dict,
 
 async def start(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    await discord_check(settings['bot']['started'], message, "Not starting another thread.")
-    await discord_check(not hasattr(channel, "guild"), message, "The bot can't be used in DM.")
+    discord_check(settings['bot']['started'], message, "Not starting another thread.")
+    discord_check(not hasattr(channel, "guild"), message, "The bot can't be used in DM.")
 
     guild: discord.Guild = channel.guild
     author: discord.User = message.author
-    await discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+    discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
                         "Insufficient permission. This bot can only be used in its dedicated channel on the "
                         "\"Yannic Kilcher\" discord server.")
-    await discord_check(author.id not in ADMIN_USER, message,
+    discord_check(author.id not in ADMIN_USER, message,
                         "Insufficient permission. Only the owner of this bot is allowed to run this command. "
                         "Try .add instead")
     settings['bot']['started'] = 1
@@ -332,9 +333,9 @@ async def change_setting(client: discord.Client, message: discord.Message, sourc
     channel: discord.TextChannel = message.channel
     author: discord.User = message.author
     arguments = message.content.split(' ')[1:]
-    await discord_check(len(arguments) != 3, message,
+    discord_check(len(arguments) != 3, message,
                         "Invalid number of arguments. Should be `group_name parameter_name value`")
-    await discord_check(author.id not in ADMIN_USER, message,
+    discord_check(author.id not in ADMIN_USER, message,
                         "Invalid number of arguments. Should be `group_name parameter_name value`")
     group_name, parameter_name, value = arguments
     previous_value = settings[group_name][parameter_name]
