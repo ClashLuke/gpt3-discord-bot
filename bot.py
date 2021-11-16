@@ -1,3 +1,4 @@
+import datetime
 import signal
 import os
 import asyncio
@@ -24,8 +25,10 @@ VERIFIED_ROLE = 821375158295592961  # Yannic Kilcher "verified"
 ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
 MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
 ALLOWED_GUILD = 714501525455634453  # Yannic Kilcher
+SHITPOSTING_CHANNEL = 736963923521175612
+PRUNING_DAYS = 60
 ADMIN_USER = [690665848876171274, 191929809444667394, 699606075023949884]  # ClashLuke, XMaster, Yannic
-ROLES = {'reinforcement-learning':      760062682693894144, 'computer-vision': 762042823666171955,
+ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042823666171955,
          'natural-language-processing': 762042825260007446, 'meetup': 782362139087208478, 'verified': 821375158295592961
          }
 APPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "yes"
@@ -67,7 +70,7 @@ def call_gpt(prompt, settings):
     return openai.Completion.create(prompt=prompt, **settings['gpt3'])['choices'][0]['text']
 
 
-async def basic_check(message: discord.Message, permission, dm=False):
+def basic_check(message: discord.Message, permission, dm=False):
     channel: discord.TextChannel = message.channel
     await discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
     await discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
@@ -87,7 +90,7 @@ async def complete(client: discord.Client, message: discord.Message, sources: di
     channel: discord.TextChannel = message.channel
     await channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
                        reference=message)
-    # await basic_check(message, True)
+    # basic_check(message, True)
     # await channel.send(call_gpt(message.content[len('.complete '):], settings))
 
 
@@ -97,9 +100,20 @@ async def verify(client: discord.Client, message: discord.Message, sources: dict
         await message.delete(delay=1)
 
 
+async def prune(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
+    basic_check(message, True)
+    server: discord.Guild = message.guild
+    channel: discord.TextChannel = server.get_channel(SHITPOSTING_CHANNEL)
+    now = datetime.datetime.now()
+    async for msg in channel.history(limit=None):
+        msg: discord.Message = msg
+        created_at: datetime.datetime = msg.created_at
+        if created_at > now + datetime.timedelta(days=PRUNING_DAYS):
+            await msg.delete()
+
 
 async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False, True)
+    basic_check(message, False, True)
 
     query = message.content[len('.add '):]
     author_id = message.author.id
@@ -113,7 +127,7 @@ async def add(client: discord.Client, message: discord.Message, sources: dict, s
 
 
 async def delete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False, True)
+    basic_check(message, False, True)
     channel: discord.TextChannel = message.channel
     query = message.content[len('.delete '):]
     author_id = message.author.id
@@ -130,7 +144,7 @@ async def delete(client: discord.Client, message: discord.Message, sources: dict
 
 
 async def role(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False)
+    basic_check(message, False)
     query = message.content[len('.role '):]
     channel: discord.TextChannel = message.channel
     if query in ROLES:
@@ -151,7 +165,7 @@ async def role(client: discord.Client, message: discord.Message, sources: dict, 
 
 async def add_fallback(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    await basic_check(message, True)
+    basic_check(message, True)
 
     query = message.content[len('.add_fallback '):]
     FALLBACKS.append(query)
@@ -159,10 +173,10 @@ async def add_fallback(client: discord.Client, message: discord.Message, sources
     await channel.send(f"Added query to the fallback list. There are now {len(FALLBACKS)} queries in said list.",
                        reference=message)
 
-         
+
 async def restart(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
     channel: discord.TextChannel = message.channel
-    await basic_check(message, True)
+    basic_check(message, True)
 
     await channel.send(f"Restarting", reference=message)
     await dump_queue(client, message, sources, settings)
@@ -180,7 +194,7 @@ async def settings(client: discord.Client, message: discord.Message, sources: di
 
 
 async def dump_queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+    basic_check(message, True)
     with open("queue_dump.json", 'w') as f:
         f.write(jsonpickle.dumps(dict(sources), indent=4))
     channel: discord.TextChannel = message.channel
@@ -188,7 +202,7 @@ async def dump_queue(client: discord.Client, message: discord.Message, sources: 
 
 
 async def dump_settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+    basic_check(message, True)
     with open("setting_dump.json", 'w') as f:
         f.write(jsonpickle.dumps({key: dict(val) for key, val in settings.items()}, indent=4))
     channel: discord.TextChannel = message.channel
@@ -196,7 +210,7 @@ async def dump_settings(client: discord.Client, message: discord.Message, source
 
 
 async def dump_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+    basic_check(message, True)
     with open("fallbacks.json", 'w') as f:
         f.write(jsonpickle.dumps(FALLBACKS, indent=4))
     channel: discord.TextChannel = message.channel
@@ -204,7 +218,7 @@ async def dump_fallbacks(client: discord.Client, message: discord.Message, sourc
 
 
 async def load_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+    basic_check(message, True)
     with open("fallbacks.json", 'w') as f:
         fallbacks = jsonpickle.loads(f.read())
     FALLBACKS.clear()
@@ -219,7 +233,7 @@ async def load_settings(client: discord.Client, message: discord.Message, source
     for top_key, top_val in tmp.items():
         for key, val in top_val.items():
             settings[top_key][key] = val
-    await basic_check(message, True)
+    basic_check(message, True)
     channel: discord.TextChannel = message.channel
     await channel.send("Loaded settings.", reference=message)
 
@@ -229,7 +243,7 @@ async def load_queue(client: discord.Client, message: discord.Message, sources: 
         tmp = jsonpickle.loads(f.read())
     for key, val in tmp.items():
         sources[key] = val
-    await basic_check(message, True)
+    basic_check(message, True)
     channel: discord.TextChannel = message.channel
     await channel.send("Loaded queue.", reference=message)
 
@@ -309,7 +323,9 @@ async def start(client: discord.Client, message: discord.Message, sources: dict,
         max_ln = math.log(settings['bot']['max_response_time'])
         delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
         print(f"Next delay: {int(delay / 60):3d} minutes")
-        time.sleep(delay)
+        start_time = time.time()
+        await prune(client, message, sources, settings)
+        time.sleep(delay + start_time - time.time())  # Ensure delay stays the same
 
 
 async def change_setting(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
@@ -327,10 +343,10 @@ async def change_setting(client: discord.Client, message: discord.Message, sourc
 
 
 COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 'complete': complete,
-            'queue':          queue, 'start': start, 'dump_queue': dump_queue, 'load_queue': load_queue,
-            'dump_settings':  dump_settings, 'load_settings': load_settings,
+            'queue': queue, 'start': start, 'dump_queue': dump_queue, 'load_queue': load_queue,
+            'dump_settings': dump_settings, 'load_settings': load_settings,
             'dump_fallbacks': dump_fallbacks, 'load_fallbacks': load_fallbacks, 'add_fallback': add_fallback,
-            'delete':         delete, 'role': role,
+            'delete': delete, 'role': role,
             'restart': restart, 'verify': verify
             }
 
@@ -422,28 +438,29 @@ if __name__ == '__main__':
     _gpt3 = manager.dict({})
     _bot = manager.dict({})
     _settings = manager.dict({})
-    _gpt3.update({'temperature':       0.5,
-                  'top_p':             1,
-                  'max_tokens':        256,
-                  'presence_penalty':  0.45,
+    _gpt3.update({'temperature': 0.5,
+                  'top_p': 1,
+                  'max_tokens': 256,
+                  'presence_penalty': 0.45,
                   'frequency_penalty': 0.65,
-                  'best_of':           1,
-                  'engine':            "davinci"
+                  'best_of': 1,
+                  'engine': "davinci"
                   })
     _bot.update({'min_response_time': 60,
                  'max_response_time': 60 * 60 * 24,
-                 "started":           0,
-                 'min_score':         0,
-                 'show_no_score':     0,
-                 'show_empty':        0,
-                 'use_fallback':      0,
+                 "started": 0,
+                 'min_score': 0,
+                 'show_no_score': 0,
+                 'show_empty': 0,
+                 'use_fallback': 0,
                  'max_synchronisation_delay_ms': 2000,
                  })
     _settings.update({'gpt3': _gpt3,
-                      'bot':  _bot
+                      'bot': _bot
                       })
-    procs = [multiprocessing.Process(target=init, args=(idx, _workers, _handled_messages, _sources, _settings), daemon=True)
-             for idx in range(THREADS)]
+    procs = [
+        multiprocessing.Process(target=init, args=(idx, _workers, _handled_messages, _sources, _settings), daemon=True)
+        for idx in range(THREADS)]
     procs.append(multiprocessing.Process(target=clean_handled_messages, args=(_handled_messages,), daemon=True))
     procs.append(multiprocessing.Process(target=backup, args=(_sources,), daemon=True))
     for t in procs:
