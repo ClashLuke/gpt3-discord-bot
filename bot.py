@@ -300,7 +300,8 @@ async def start(client: discord.Client, message: discord.Message, sources: dict,
                         "Insufficient permission. Only the owner of this bot is allowed to run this command. "
                         "Try .add instead")
     settings['bot']['started'] = 1
-    fire(channel.send("Starting the listener for this channel.", reference=message))
+    fire(channel.send("Starting the listener for this channel.", reference=message),
+         prune(message))
 
     while True:
         proposals = await eval_queue(client, sources)
@@ -335,7 +336,6 @@ async def start(client: discord.Client, message: discord.Message, sources: dict,
         delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
         print(f"Next delay: {int(delay / 60):3d} minutes")
         start_time = time.time()
-        await prune(message)
         time.sleep(delay + start_time - time.time())  # Ensure delay stays the same
 
 
@@ -385,7 +385,6 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             local_check(fn_name not in COMMANDS, "Unknown command")
             local_check(idx not in available_workers, "I'm already working. Skipping task.")
             local_check(not message.content.startswith('.'), "Not a command")
-            time.sleep(idx * settings['bot']['max_synchronisation_delay_ms'] / THREADS / 1000)
             local_check(message.id in handled_messages, "handled already")
             local_check(message.id % len(available_workers) != available_workers.index(idx), f"Not mine {idx}")
         except ExitFunctionException:
