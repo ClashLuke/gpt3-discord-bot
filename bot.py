@@ -193,12 +193,17 @@ async def add_fallback(ctx: Context):
                            reference=ctx.message))
 
 
+def await_ctx(ctx: Context):
+    for msg in ctx.fired_messages:
+        await msg
+
+
 async def restart(ctx: Context):
     channel: discord.TextChannel = ctx.message.channel
     await basic_check(ctx, True)
 
-    fire(ctx, channel.send(f"Restarting", reference=ctx.message))
-    await dump_queue(ctx)
+    fire(ctx, channel.send(f"Restarting", reference=ctx.message), dump_queue(ctx))
+    await_ctx(ctx)
 
     os.system("python3 bot.py")
     os.kill(os.getppid(), signal.SIGTERM)
@@ -411,8 +416,7 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             if LOG_LEVEL <= logging.ERROR:
                 traceback.print_exc()
 
-        for msg in ctx.fired_messages:
-            await msg
+        await_ctx(ctx)
 
         if idx not in available_workers:
             available_workers.append(idx)
