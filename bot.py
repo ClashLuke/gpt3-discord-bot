@@ -58,15 +58,10 @@ class Context:
     fired_messages: typing.List[asyncio.Future]
 
 
-def fire(ctx: Context, *coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> asyncio.Future:
+def fire(ctx: Context, *coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> None:
     if len(coroutine) == 0:
         coroutine = coroutine[0]
-    if isinstance(coroutine, typing.Coroutine):
-        future = asyncio.ensure_future(coroutine)
-    else:
-        future = asyncio.gather(*coroutine)
-    ctx.fired_messages.append(future)
-    return future
+    ctx.fired_messages.append(coroutine)
 
 
 def debug(message: typing.Any):
@@ -417,7 +412,8 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             if LOG_LEVEL <= logging.ERROR:
                 traceback.print_exc()
 
-        asyncio.gather(ctx.fired_messages)
+        for msg in ctx.fired_messages:
+            await msg
 
         if idx not in available_workers:
             available_workers.append(idx)
