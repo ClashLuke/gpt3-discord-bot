@@ -31,7 +31,8 @@ PRUNING_DAYS = 60
 ADMIN_USER = [690665848876171274, 191929809444667394, 699606075023949884]  # ClashLuke, XMaster, Yannic
 ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042823666171955,
          'natural-language-processing': 762042825260007446, 'meetup': 782362139087208478,
-         'verified': 821375158295592961, 'homebrew-nlp': 911661603190079528}
+         'verified': 821375158295592961, 'homebrew-nlp': 911661603190079528,
+         'world-modelz': 914229949873913877}
 APPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "yes"
 DISAPPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "noo"
 THREADS = 16
