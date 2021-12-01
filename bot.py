@@ -175,11 +175,9 @@ async def role(ctx: Context):
         for role in author.roles:
             role: discord.Role = role
             if role == queried_role:
-                author.remove_roles(role)
-                fire(ctx, channel.send(f"Removed role", reference=ctx.message))
+                fire(ctx, author.remove_roles(role), channel.send(f"Removed role", reference=ctx.message))
                 return
-        author.add_roles(queried_role)
-        fire(ctx, channel.send(f"Added role", reference=ctx.message))
+        fire(ctx, author.add_roles(queried_role), channel.send(f"Added role", reference=ctx.message))
     else:
         fire(ctx, channel.send(f"Couldn't find role", reference=ctx.message))
 
