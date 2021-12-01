@@ -55,13 +55,13 @@ class Context:
     sources: dict
     settings: dict
 
-    fired_messages: typing.List[asyncio.Future]
+    fired_messages: typing.List[typing.Coroutine]
 
 
 def fire(ctx: Context, *coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> None:
     if len(coroutine) == 0:
         coroutine = coroutine[0]
-    ctx.fired_messages.append(coroutine)
+    ctx.fired_messages.extend(coroutine)
 
 
 def debug(message: typing.Any):
@@ -288,7 +288,7 @@ async def queue(ctx: Context):
     proposals = await eval_queue(ctx)
     proposals = sorted([(count, prompt) for _, (count, _, prompt) in proposals.items()], reverse=True)
     if len(proposals) == 0:
-        channel.send("Queue is empty", reference=ctx.message)
+        fire(ctx, channel.send("Queue is empty", reference=ctx.message))
         return
     fire(ctx, channel.send('\n\n\n'.join([f'PROMPT: ```\n{prompt[:40]}```Score: {count}'
                                           for count, prompt in proposals[:10]])
@@ -324,21 +324,21 @@ async def start(ctx: Context):
                 prompt = random.choice(FALLBACKS)
                 response = call_gpt(prompt, ctx.settings)
                 prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-                fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
+                await channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt)
             elif count < ctx.settings['bot']['min_score'] and ctx.settings['bot']['show_no_score']:
-                fire(ctx, channel.send("Nothing has any score, skipping this one."))
+                await channel.send("Nothing has any score, skipping this one.")
             else:
                 response = call_gpt(best, ctx.settings)
-                fire(ctx, channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
-                                       reference=await channel.fetch_message(message_id)))
+                await channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
+                                   reference=await channel.fetch_message(message_id))
                 del ctx.sources[message_id]
         elif ctx.settings['bot']['use_fallback']:
             prompt = random.choice(FALLBACKS)
             response = call_gpt(prompt, ctx.settings)
             prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-            fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
+            await channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt)
         elif ctx.settings['bot']['show_empty']:
-            fire(ctx, channel.send("No prompts in queue, skipping this one."))
+            await channel.send("No prompts in queue, skipping this one.")
 
         min_ln = math.log(ctx.settings['bot']['min_response_time'])
         max_ln = math.log(ctx.settings['bot']['max_response_time'])
