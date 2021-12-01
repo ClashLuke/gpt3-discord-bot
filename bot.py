@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import datetime
 import logging
 import math
@@ -47,13 +48,25 @@ class ExitFunctionException(Exception):
     pass
 
 
-def fire(*coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> asyncio.Future:
+@dataclasses.dataclass
+class Context:
+    client: discord.Client
+    message: discord.Message
+    sources: dict
+    settings: dict
+
+    fired_messages: typing.List[asyncio.Future]
+
+
+def fire(ctx: Context, *coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> asyncio.Future:
     if len(coroutine) == 0:
         coroutine = coroutine[0]
     if isinstance(coroutine, typing.Coroutine):
-        return asyncio.ensure_future(coroutine)
+        future = asyncio.ensure_future(coroutine)
     else:
-        return asyncio.gather(*coroutine)
+        future = asyncio.gather(*coroutine)
+    ctx.fired_messages.append(future)
+    return future
 
 
 def debug(message: typing.Any):
@@ -61,10 +74,10 @@ def debug(message: typing.Any):
         print(message)
 
 
-async def discord_check(check: bool, message: discord.Message, response: str):
+async def discord_check(ctx: Context, check: bool, response: str):
     if check:
-        channel: discord.TextChannel = message.channel
-        fire(channel.send(response, reference=message))
+        channel: discord.TextChannel = ctx.message.channel
+        fire(ctx, channel.send(response, reference=ctx.message))
         raise ExitFunctionException
 
 
@@ -79,24 +92,24 @@ def call_gpt(prompt, settings):
     return openai.Completion.create(prompt=prompt, **settings['gpt3'])['choices'][0]['text']
 
 
-async def basic_check(message: discord.Message, permission, dm=False):
-    channel: discord.TextChannel = message.channel
-    await discord_check(not dm and not hasattr(channel, "guild"), message, "This command can't be used in DM.")
-    await discord_check(dm and hasattr(channel, "guild"), message, "This command only be used in DM.")
+async def basic_check(ctx: Context, permission, dm=False):
+    channel: discord.TextChannel = ctx.message.channel
+    await discord_check(ctx, not dm and not hasattr(channel, "guild"), "This command can't be used in DM.")
+    await discord_check(ctx, dm and hasattr(channel, "guild"), "This command only be used in DM.")
     if not dm:
         guild: discord.Guild = channel.guild
-        await discord_check(not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+        await discord_check(ctx, not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD,
                             "Insufficient permission. This bot can only be used in its dedicated channel on the "
                             "\"Yannic Kilcher\" discord server.")
     if permission:
-        author: discord.User = message.author
-        await discord_check(author.id not in ADMIN_USER, message,
+        author: discord.User = ctx.message.author
+        await discord_check(ctx, author.id not in ADMIN_USER,
                             "Insufficient permission. Only the owners of this bot are allowed to run this command. "
                             "Try .add instead")
 
 
-async def prune(message: discord.Message):
-    channel: discord.TextChannel = message.guild.get_channel(SHITPOSTING_CHANNEL)
+async def prune(ctx: Context):
+    channel: discord.TextChannel = ctx.message.guild.get_channel(SHITPOSTING_CHANNEL)
     deletions = []
     async for msg in channel.history(limit=None,
                                      before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
@@ -104,164 +117,165 @@ async def prune(message: discord.Message):
             deletions.append(msg.delete())
         except discord.errors.NotFound:
             break
-    fire(deletions)
+    fire(ctx, deletions)
 
 
-async def complete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
-                      reference=message))
+async def complete(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
+                           reference=ctx.message))
     # await basic_check(message, True)
     # await channel.send(call_gpt(message.content[len('.complete '):], settings))
 
 
-async def verify(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    if message.channel.id == VERIFY_CHANNEL:
-        fire(message.author.add_roles(discord.utils.get(message.guild.roles, id=VERIFIED_ROLE)),
-             message.delete(delay=1))
+async def verify(ctx: Context):
+    if ctx.message.channel.id == VERIFY_CHANNEL:
+        fire(ctx,
+             ctx.message.author.add_roles(discord.utils.get(ctx.message.guild.roles, id=VERIFIED_ROLE)),
+             ctx.message.delete(delay=1))
 
 
-async def add(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False, True)
+async def add(ctx: Context):
+    await basic_check(ctx, False, True)
 
-    query = message.content[len('.add '):]
-    author_id = message.author.id
+    query = ctx.message.content[len('.add '):]
+    author_id = ctx.message.author.id
     reply = await CHANNEL.send(f"<@{author_id}> added ```\n{query}``` to the queue. You can vote on it by clicking the "
                                f":{APPROVAL_EMOJI.name}: or :{DISAPPROVAL_EMOJI.name}: reactions.\n\nTo add a query "
                                f"yourself, send me a message like `.add YOUR PROMPT HERE` via DM!")
-    fire(reply.add_reaction(APPROVAL_EMOJI), reply.add_reaction(DISAPPROVAL_EMOJI))
+    fire(ctx, reply.add_reaction(APPROVAL_EMOJI), reply.add_reaction(DISAPPROVAL_EMOJI))
 
-    sources[reply.id] = (query, author_id)
+    ctx.sources[reply.id] = (query, author_id)
 
 
-async def delete(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False, True)
-    channel: discord.TextChannel = message.channel
-    query = message.content[len('.delete '):]
-    author_id = message.author.id
+async def delete(ctx: Context):
+    await basic_check(ctx, False, True)
+    channel: discord.TextChannel = ctx.message.channel
+    query = ctx.message.content[len('.delete '):]
+    author_id = ctx.message.author.id
     deleted = False
     ops = []
-    for reply_id, (qry, qry_author_id) in sources.items():
+    for reply_id, (qry, qry_author_id) in ctx.sources.items():
         if author_id == qry_author_id and qry == query:
-            del sources[reply_id]
-            ops.extend([channel.send(f"Removed query.", reference=message),
+            del ctx.sources[reply_id]
+            ops.extend([channel.send(f"Removed query.", reference=ctx.message),
                         CHANNEL.fetch_message(reply_id).delete()])
             deleted = True
             break
     if not deleted:
-        ops.append(channel.send(f"Didn't find query.", reference=message))
-    fire(ops)
+        ops.append(channel.send(f"Didn't find query.", reference=ctx.message))
+    fire(ctx, ops)
 
 
-async def role(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, False)
-    query = message.content[len('.role '):]
-    channel: discord.TextChannel = message.channel
-    ops = []
+async def role(ctx: Context):
+    await basic_check(ctx, False)
+    query = ctx.message.content[len('.role '):]
+    channel: discord.TextChannel = ctx.message.channel
+
     if query in ROLES:
-        author: discord.Member = message.author
-        guild: discord.Guild = message.guild
+        author: discord.Member = ctx.message.author
+        guild: discord.Guild = ctx.message.guild
         queried_role: discord.Role = guild.get_role(ROLES[query])
         for role in author.roles:
             role: discord.Role = role
             if role == queried_role:
                 author.remove_roles(role)
-                fire(channel.send(f"Removed role", reference=message))
+                fire(ctx, channel.send(f"Removed role", reference=ctx.message))
                 return
         author.add_roles(queried_role)
-        fire(channel.send(f"Added role", reference=message))
+        fire(ctx, channel.send(f"Added role", reference=ctx.message))
     else:
-        fire(channel.send(f"Couldn't find role", reference=message))
+        fire(ctx, channel.send(f"Couldn't find role", reference=ctx.message))
 
 
-async def add_fallback(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    await basic_check(message, True)
+async def add_fallback(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    await basic_check(ctx, True)
 
-    query = message.content[len('.add_fallback '):]
+    query = ctx.message.content[len('.add_fallback '):]
     FALLBACKS.append(query)
 
-    fire(channel.send(f"Added query to the fallback list. There are now {len(FALLBACKS)} queries in said list.",
-                      reference=message))
+    fire(ctx, channel.send(f"Added query to the fallback list. There are now {len(FALLBACKS)} queries in said list.",
+                           reference=ctx.message))
 
 
-async def restart(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    await basic_check(message, True)
+async def restart(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    await basic_check(ctx, True)
 
-    fire(channel.send(f"Restarting", reference=message))
-    await dump_queue(client, message, sources, settings)
+    fire(ctx, channel.send(f"Restarting", reference=ctx.message))
+    await dump_queue(ctx)
 
     os.system("python3 bot.py")
     os.kill(os.getppid(), signal.SIGTERM)
 
 
-async def settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    fire(channel.send(''.join(["gpt3:\n\t", '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['gpt3'].items()])),
-                               '\n'
-                               'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['bot'].items()]))]),
-                      reference=message))
+async def settings(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send(''.join(["gpt3:\n\t", '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['gpt3'].items()])),
+                                    '\n'
+                                    'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['bot'].items()]))]),
+                           reference=ctx.message))
 
 
-async def dump_queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+async def dump_queue(ctx: Context):
+    await basic_check(ctx, True)
     with open("queue_dump.json", 'w') as f:
-        f.write(jsonpickle.dumps(dict(sources), indent=4))
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Dumped queue.", reference=message))
+        f.write(jsonpickle.dumps(dict(ctx.sources), indent=4))
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Dumped queue.", reference=ctx.message))
 
 
-async def dump_settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+async def dump_settings(ctx: Context):
+    await basic_check(ctx, True)
     with open("setting_dump.json", 'w') as f:
         f.write(jsonpickle.dumps({key: dict(val) for key, val in settings.items()}, indent=4))
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Dumped settings.", reference=message))
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Dumped settings.", reference=ctx.message))
 
 
-async def dump_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+async def dump_fallbacks(ctx: Context):
+    await basic_check(ctx, True)
     with open("fallbacks.json", 'w') as f:
         f.write(jsonpickle.dumps(FALLBACKS, indent=4))
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Dumped fallbacks.", reference=message))
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Dumped fallbacks.", reference=ctx.message))
 
 
-async def load_fallbacks(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await basic_check(message, True)
+async def load_fallbacks(ctx: Context):
+    await basic_check(ctx, True)
     with open("fallbacks.json", 'w') as f:
         fallbacks = jsonpickle.loads(f.read())
     FALLBACKS.clear()
     FALLBACKS.extend(fallbacks)
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Loaded fallbacks.", reference=message))
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Loaded fallbacks.", reference=ctx.message))
 
 
-async def load_settings(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
+async def load_settings(ctx: Context):
     with open("setting_dump.json", 'r') as f:
         tmp = jsonpickle.loads(f.read())
     for top_key, top_val in tmp.items():
         for key, val in top_val.items():
-            settings[top_key][key] = val
-    await basic_check(message, True)
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Loaded settings.", reference=message))
+            ctx.settings[top_key][key] = val
+    await basic_check(ctx, True)
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Loaded settings.", reference=ctx.message))
 
 
-async def load_queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
+async def load_queue(ctx: Context):
     with open("queue_dump.json", 'r') as f:
         tmp = jsonpickle.loads(f.read())
     for key, val in tmp.items():
-        sources[key] = val
-    await basic_check(message, True)
-    channel: discord.TextChannel = message.channel
-    fire(channel.send("Loaded queue.", reference=message))
+        ctx.sources[key] = val
+    await basic_check(ctx, True)
+    channel: discord.TextChannel = ctx.message.channel
+    fire(ctx, channel.send("Loaded queue.", reference=ctx.message))
 
 
-async def eval_queue(client, sources):
+async def eval_queue(ctx: Context):
     proposals = {}
-    for answer_id, (prompt, user_id) in sources.items():
+    for answer_id, (prompt, user_id) in ctx.sources.items():
         message: discord.Message = await CHANNEL.fetch_message(answer_id)
         proposals[answer_id] = [0, user_id, prompt]
         for r in message.reactions:
@@ -274,83 +288,83 @@ async def eval_queue(client, sources):
     return proposals
 
 
-async def queue(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    proposals = await eval_queue(client, sources)
+async def queue(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    proposals = await eval_queue(ctx)
     proposals = sorted([(count, prompt) for _, (count, _, prompt) in proposals.items()], reverse=True)
     if len(proposals) == 0:
-        channel.send("Queue is empty", reference=message)
+        channel.send("Queue is empty", reference=ctx.message)
         return
-    fire(channel.send('\n\n\n'.join([f'PROMPT: ```\n{prompt[:40]}```Score: {count}'
-                                     for count, prompt in proposals[:10]])
-                      + f'..and {len(proposals) - 10} more' * (len(proposals) > 10), reference=message))
+    fire(ctx, channel.send('\n\n\n'.join([f'PROMPT: ```\n{prompt[:40]}```Score: {count}'
+                                          for count, prompt in proposals[:10]])
+                           + f'..and {len(proposals) - 10} more' * (len(proposals) > 10), reference=ctx.message))
 
 
-async def start(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    await discord_check(settings['bot']['started'], message, "Not starting another thread.")
-    await discord_check(not hasattr(channel, "guild"), message, "The bot can't be used in DM.")
+async def start(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    await discord_check(ctx, ctx.settings['bot']['started'], "Not starting another thread.")
+    await discord_check(ctx, not hasattr(channel, "guild"), "The bot can't be used in DM.")
 
     guild: discord.Guild = channel.guild
-    author: discord.User = message.author
-    await discord_check(not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD, message,
+    author: discord.User = ctx.message.author
+    await discord_check(ctx, not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD,
                         "Insufficient permission. This bot can only be used in its dedicated channel on the "
                         "\"Yannic Kilcher\" discord server.")
-    await discord_check(author.id not in ADMIN_USER, message,
+    await discord_check(ctx, author.id not in ADMIN_USER,
                         "Insufficient permission. Only the owner of this bot is allowed to run this command. "
                         "Try .add instead")
-    settings['bot']['started'] = 1
-    fire(channel.send("Starting the listener for this channel.", reference=message),
-         prune(message))
+    ctx.settings['bot']['started'] = 1
+    fire(ctx, channel.send("Starting the listener for this channel.", reference=ctx.message),
+         prune(ctx))
 
     while True:
-        proposals = await eval_queue(client, sources)
+        proposals = await eval_queue(ctx)
         if proposals:
             _, (count, _, _) = max(proposals.items(), key=lambda x: x[1][0])
             best, message_id, author = random.choice([(prompt, message_id, author_id)
                                                       for message_id, (score, author_id, prompt)
                                                       in proposals.items()
                                                       if score == count])
-            if count < settings['bot']['min_score'] and settings['bot']['use_fallback']:
+            if count < ctx.settings['bot']['min_score'] and ctx.settings['bot']['use_fallback']:
                 prompt = random.choice(FALLBACKS)
-                response = call_gpt(prompt, settings)
+                response = call_gpt(prompt, ctx.settings)
                 prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-                fire(channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
-            elif count < settings['bot']['min_score'] and settings['bot']['show_no_score']:
-                fire(channel.send("Nothing has any score, skipping this one."))
+                fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
+            elif count < ctx.settings['bot']['min_score'] and ctx.settings['bot']['show_no_score']:
+                fire(ctx, channel.send("Nothing has any score, skipping this one."))
             else:
-                response = call_gpt(best, settings)
-                fire(channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
-                                  reference=await channel.fetch_message(message_id)))
-                del sources[message_id]
-        elif settings['bot']['use_fallback']:
+                response = call_gpt(best, ctx.settings)
+                fire(ctx, channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
+                                       reference=await channel.fetch_message(message_id)))
+                del ctx.sources[message_id]
+        elif ctx.settings['bot']['use_fallback']:
             prompt = random.choice(FALLBACKS)
-            response = call_gpt(prompt, settings)
+            response = call_gpt(prompt, ctx.settings)
             prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-            fire(channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
-        elif settings['bot']['show_empty']:
-            fire(channel.send("No prompts in queue, skipping this one."))
+            fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
+        elif ctx.settings['bot']['show_empty']:
+            fire(ctx, channel.send("No prompts in queue, skipping this one."))
 
-        min_ln = math.log(settings['bot']['min_response_time'])
-        max_ln = math.log(settings['bot']['max_response_time'])
+        min_ln = math.log(ctx.settings['bot']['min_response_time'])
+        max_ln = math.log(ctx.settings['bot']['max_response_time'])
         delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
         print(f"Next delay: {int(delay / 60):3d} minutes")
         start_time = time.time()
         time.sleep(delay + start_time - time.time())  # Ensure delay stays the same
 
 
-async def change_setting(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    channel: discord.TextChannel = message.channel
-    author: discord.User = message.author
-    arguments = message.content.split(' ')[1:]
-    await discord_check(len(arguments) != 3, message,
+async def change_setting(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    author: discord.User = ctx.message.author
+    arguments = ctx.message.content.split(' ')[1:]
+    await discord_check(ctx, len(arguments) != 3,
                         "Invalid number of arguments. Should be `group_name parameter_name value`")
-    await discord_check(author.id not in ADMIN_USER, message,
+    await discord_check(ctx, author.id not in ADMIN_USER,
                         "Invalid number of arguments. Should be `group_name parameter_name value`")
     group_name, parameter_name, value = arguments
-    previous_value = settings[group_name][parameter_name]
-    settings[group_name][parameter_name] = type(previous_value)(value)
-    fire(channel.send(f"Changed {parameter_name} from {previous_value} to {value}", reference=message))
+    previous_value = ctx.settings[group_name][parameter_name]
+    ctx.settings[group_name][parameter_name] = type(previous_value)(value)
+    fire(ctx, channel.send(f"Changed {parameter_name} from {previous_value} to {value}", reference=ctx.message))
 
 
 COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 'complete': complete,
@@ -362,8 +376,9 @@ COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 
             }
 
 
-async def bot_help(client: discord.Client, message: discord.Message, sources: dict, settings: dict):
-    await message.channel.send(f'Available Commands: `{"` `".join(sorted(list(COMMANDS.keys())))}`', reference=message)
+async def bot_help(ctx: Context):
+    fire(ctx, ctx.message.channel.send(f'Available Commands: `{"` `".join(sorted(list(COMMANDS.keys())))}`',
+                                       reference=ctx.message))
 
 
 COMMANDS['help'] = bot_help
@@ -392,14 +407,17 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
 
         handled_messages[message.id] = time.time()
         available_workers.remove(idx)
+        ctx: Context = Context(client, message, sources, settings, [])
 
         try:
-            fire(COMMANDS[fn_name](client, message, sources, settings))
+            fire(ctx, COMMANDS[fn_name](ctx))
         except ExitFunctionException:
             pass
         except Exception as exc:
             if LOG_LEVEL <= logging.ERROR:
                 traceback.print_exc()
+
+        asyncio.gather(ctx.fired_messages)
 
         if idx not in available_workers:
             available_workers.append(idx)
