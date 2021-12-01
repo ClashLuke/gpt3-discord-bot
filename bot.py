@@ -416,7 +416,7 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             if LOG_LEVEL <= logging.ERROR:
                 traceback.print_exc()
 
-        await_ctx(ctx)
+        await await_ctx(ctx)
 
         if idx not in available_workers:
             available_workers.append(idx)
