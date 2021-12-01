@@ -193,7 +193,7 @@ async def add_fallback(ctx: Context):
                            reference=ctx.message))
 
 
-def await_ctx(ctx: Context):
+async def await_ctx(ctx: Context):
     for msg in ctx.fired_messages:
         await msg
 
@@ -203,7 +203,7 @@ async def restart(ctx: Context):
     await basic_check(ctx, True)
 
     fire(ctx, channel.send(f"Restarting", reference=ctx.message), dump_queue(ctx))
-    await_ctx(ctx)
+    await await_ctx(ctx)
 
     os.system("python3 bot.py")
     os.kill(os.getppid(), signal.SIGTERM)
