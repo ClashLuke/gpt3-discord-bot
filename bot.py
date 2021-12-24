@@ -44,7 +44,6 @@ openai.organization = OPENAI_ORGANIZATION
 FALLBACKS = []
 CHANNEL: typing.Optional[discord.TextChannel] = None
 
-
 class ExitFunctionException(Exception):
     pass
 
@@ -56,13 +55,15 @@ class Context:
     sources: dict
     settings: dict
 
-    fired_messages: typing.List[typing.Coroutine]
+    fired_messages: typing.List[asyncio.Task]
 
 
 def fire(ctx: Context, *coroutine: typing.Union[typing.Coroutine, typing.Iterable[typing.Coroutine]]) -> None:
     if len(coroutine) == 0:
         coroutine = coroutine[0]
-    ctx.fired_messages.extend(coroutine)
+    if isinstance(coroutine, typing.Coroutine):
+        coroutine = [coroutine]
+    ctx.fired_messages.extend([asyncio.create_task(coro) for coro in coroutine])
 
 
 def debug(message: typing.Any):
@@ -106,14 +107,12 @@ async def basic_check(ctx: Context, permission, dm=False):
 
 async def prune(ctx: Context):
     channel: discord.TextChannel = ctx.message.guild.get_channel(SHITPOSTING_CHANNEL)
-    deletions = []
     async for msg in channel.history(limit=None,
                                      before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
         try:
-            deletions.append(msg.delete())
+            fire(ctx, msg.delete())
         except discord.errors.NotFound:
             break
-    fire(ctx, deletions)
 
 
 async def complete(ctx: Context):
@@ -150,17 +149,15 @@ async def delete(ctx: Context):
     query = ctx.message.content[len('.delete '):]
     author_id = ctx.message.author.id
     deleted = False
-    ops = []
     for reply_id, (qry, qry_author_id) in ctx.sources.items():
         if author_id == qry_author_id and qry == query:
             del ctx.sources[reply_id]
-            ops.extend([channel.send(f"Removed query.", reference=ctx.message),
-                        CHANNEL.fetch_message(reply_id).delete()])
+            fire(ctx, channel.send(f"Removed query.", reference=ctx.message),
+                 (await CHANNEL.fetch_message(reply_id)).delete())
             deleted = True
             break
     if not deleted:
-        ops.append(channel.send(f"Didn't find query.", reference=ctx.message))
-    fire(ctx, ops)
+        fire(ctx, channel.send(f"Didn't find query.", reference=ctx.message))
 
 
 async def role(ctx: Context):
@@ -328,21 +325,21 @@ async def start(ctx: Context):
                 prompt = random.choice(FALLBACKS)
                 response = call_gpt(prompt, ctx.settings)
                 prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-                await channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt)
+                fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
             elif count < ctx.settings['bot']['min_score'] and ctx.settings['bot']['show_no_score']:
-                await channel.send("Nothing has any score, skipping this one.")
+                fire(ctx, channel.send("Nothing has any score, skipping this one."))
             else:
                 response = call_gpt(best, ctx.settings)
-                await channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
-                                   reference=await channel.fetch_message(message_id))
+                fire(ctx, channel.send(f"<@{author}>\nRESPONSE:```\n{response}```",
+                                       reference=await channel.fetch_message(message_id)))
                 del ctx.sources[message_id]
         elif ctx.settings['bot']['use_fallback']:
             prompt = random.choice(FALLBACKS)
             response = call_gpt(prompt, ctx.settings)
             prompt: discord.Message = await channel.send(f"PROMPT:\n```\n{prompt}```")
-            await channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt)
+            fire(ctx, channel.send(f"RESPONSE:\n```\n{response}```", reference=prompt))
         elif ctx.settings['bot']['show_empty']:
-            await channel.send("No prompts in queue, skipping this one.")
+            fire(ctx, channel.send("No prompts in queue, skipping this one."))
 
         min_ln = math.log(ctx.settings['bot']['min_response_time'])
         max_ln = math.log(ctx.settings['bot']['max_response_time'])
