@@ -35,7 +35,6 @@ ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042
          'world-modelz': 914229949873913877}
 APPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "yes"
 DISAPPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "noo"
-THREADS = 16
 LOG_LEVEL = logging.DEBUG
 
 openai.api_key = OPENAI_API_KEY
@@ -209,10 +208,11 @@ async def restart(ctx: Context):
 
 async def settings(ctx: Context):
     channel: discord.TextChannel = ctx.message.channel
-    fire(ctx, channel.send(''.join(["gpt3:\n\t", '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['gpt3'].items()])),
-                                    '\n'
-                                    'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in settings['bot'].items()]))]),
-                           reference=ctx.message))
+    fire(ctx,
+         channel.send(''.join(["gpt3:\n\t", '\n\t'.join(sorted([f"{k}={v}" for k, v in ctx.settings['gpt3'].items()])),
+                               '\n'
+                               'bot:\n\t', '\n\t'.join(sorted([f"{k}={v}" for k, v in ctx.settings['bot'].items()]))]),
+                      reference=ctx.message))
 
 
 async def dump_queue(ctx: Context):
@@ -226,7 +226,7 @@ async def dump_queue(ctx: Context):
 async def dump_settings(ctx: Context):
     await basic_check(ctx, True)
     with open("setting_dump.json", 'w') as f:
-        f.write(jsonpickle.dumps({key: dict(val) for key, val in settings.items()}, indent=4))
+        f.write(jsonpickle.dumps({key: dict(val) for key, val in ctx.settings.items()}, indent=4))
     channel: discord.TextChannel = ctx.message.channel
     fire(ctx, channel.send("Dumped settings.", reference=ctx.message))
 
@@ -381,43 +381,37 @@ async def bot_help(ctx: Context):
 COMMANDS['help'] = bot_help
 
 
-def init(idx: int, available_workers: list, handled_messages: dict, sources: dict, settings: dict):
+async def process_message(ctx: Context):
+    fn_name = ctx.message.content[1:]
+
+    if ' ' in fn_name:
+        fn_name = fn_name[:fn_name.find(' ')]
+
+    try:
+        local_check(fn_name not in COMMANDS, "Unknown command")
+        local_check(not ctx.message.content.startswith('.'), "Not a command")
+    except ExitFunctionException:
+        return
+
+    try:
+        await COMMANDS[fn_name](ctx)
+    except ExitFunctionException:
+        pass
+    except Exception as exc:
+        if LOG_LEVEL <= logging.ERROR:
+            traceback.print_exc()
+
+
+def init(sources: dict, settings: dict):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     client = discord.Client()
 
     @client.event
     async def on_message(message: discord.Message):
-        fn_name = message.content[1:]
-
-        if ' ' in fn_name:
-            fn_name = fn_name[:fn_name.find(' ')]
-
-        try:
-            local_check(fn_name not in COMMANDS, "Unknown command")
-            local_check(idx not in available_workers, "I'm already working. Skipping task.")
-            local_check(not message.content.startswith('.'), "Not a command")
-            local_check(message.id in handled_messages, "handled already")
-            local_check(message.id % len(available_workers) != available_workers.index(idx), f"Not mine {idx}")
-        except ExitFunctionException:
-            return
-
-        handled_messages[message.id] = time.time()
-        available_workers.remove(idx)
         ctx: Context = Context(client, message, sources, settings, [])
-
-        try:
-            fire(ctx, COMMANDS[fn_name](ctx))
-        except ExitFunctionException:
-            pass
-        except Exception as exc:
-            if LOG_LEVEL <= logging.ERROR:
-                traceback.print_exc()
-
-        await await_ctx(ctx)
-
-        if idx not in available_workers:
-            available_workers.append(idx)
+        fire(ctx, process_message(ctx))
+        # await await_ctx(ctx)
 
     @client.event
     async def on_ready():
@@ -432,21 +426,11 @@ def init(idx: int, available_workers: list, handled_messages: dict, sources: dic
             connection: discord_state.ConnectionState = client._connection
             guild: discord.Guild = connection._get_guild(ALLOWED_GUILD)
             CHANNEL = guild.get_channel(ALLOWED_CHANNEL)
-        if idx not in available_workers:
-            available_workers.append(idx)
-        debug(f"Instance {idx} ({len(available_workers)}/{THREADS}) logged in as {client.user.name}")
+        debug(f"Instance logged in as {client.user.name}")
 
     loop.create_task(client.start(DISCORD_TOKEN))
     loop.run_forever()
     loop.close()
-
-
-def clean_handled_messages(handled_messages):
-    while True:
-        for msg_id, timestamp in handled_messages.items():
-            if timestamp + CLEANUP > time.time():
-                del handled_messages[msg_id]
-        time.sleep(CLEANUP)
 
 
 def backup(sources):
@@ -458,8 +442,6 @@ def backup(sources):
 
 if __name__ == '__main__':
     manager = multiprocessing.Manager()
-    _workers = manager.list([])
-    _handled_messages = manager.dict({})
     _sources = manager.dict({})
     _gpt3 = manager.dict({})
     _bot = manager.dict({})
@@ -482,13 +464,9 @@ if __name__ == '__main__':
                  'max_synchronisation_delay_ms': 2000,
                  })
     _settings.update({'gpt3': _gpt3,
-                      'bot': _bot
-                      })
-    procs = [
-        multiprocessing.Process(target=init, args=(idx, _workers, _handled_messages, _sources, _settings), daemon=True)
-        for idx in range(THREADS)]
-    procs.append(multiprocessing.Process(target=clean_handled_messages, args=(_handled_messages,), daemon=True))
-    procs.append(multiprocessing.Process(target=backup, args=(_sources,), daemon=True))
+                      'bot': _bot})
+    procs = [multiprocessing.Process(target=init, args=(_sources, _settings), daemon=True),
+             multiprocessing.Process(target=backup, args=(_sources,), daemon=True)]
     for t in procs:
         t.start()
     for t in procs:
