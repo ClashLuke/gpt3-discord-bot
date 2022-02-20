@@ -442,7 +442,7 @@ def init(sources: dict, settings: dict):
                     APPROVAL_EMOJI = emoji
                 if emoji.name == DISAPPROVAL_EMOJI:
                     DISAPPROVAL_EMOJI = emoji
-            CHANNEL: discord.Guild = client.get_channel(ALLOWED_CHANNEL)
+            CHANNEL = client.get_channel(ALLOWED_CHANNEL)
         debug(f"Core logged in as {client.user.name}")
 
     loop.create_task(client.start(DISCORD_TOKEN))
