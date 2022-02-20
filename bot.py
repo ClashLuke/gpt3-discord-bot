@@ -14,7 +14,6 @@ import typing
 import discord
 import jsonpickle
 import openai
-from discord import state as discord_state
 
 DISCORD_TOKEN = "XXXXXXXXXXXXXXXXXXXXXXXX.XXXXXX.XXXXXXXXXXXXXXX-XXXXXXXXXXX"  # Get one here: https://discord.com/developers/applications/
 OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # https://beta.openai.com/account/api-keys
@@ -298,21 +297,8 @@ async def queue(ctx: Context):
 
 
 async def start(ctx: Context):
-    channel: discord.TextChannel = ctx.message.channel
-    await discord_check(ctx, ctx.settings['bot']['started'], "Not starting another thread.")
-    await discord_check(ctx, not hasattr(channel, "guild"), "The bot can't be used in DM.")
-
-    guild: discord.Guild = channel.guild
-    author: discord.User = ctx.message.author
-    await discord_check(ctx, not channel.id == ALLOWED_CHANNEL or not guild.id == ALLOWED_GUILD,
-                        "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                        "\"Yannic Kilcher\" discord server.")
-    await discord_check(ctx, author.id not in ADMIN_USER,
-                        "Insufficient permission. Only the owner of this bot is allowed to run this command. "
-                        "Try .add instead")
+    channel: discord.TextChannel = ctx.client.get_channel(ALLOWED_CHANNEL)
     ctx.settings['bot']['started'] = 1
-    fire(ctx, channel.send("Starting the listener for this channel.", reference=ctx.message),
-         prune(ctx))
 
     while True:
         proposals = await eval_queue(ctx)
@@ -365,7 +351,7 @@ async def change_setting(ctx: Context):
 
 
 COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 'complete': complete,
-            'queue': queue, 'start': start, 'dump_queue': dump_queue, 'load_queue': load_queue,
+            'queue': queue, 'dump_queue': dump_queue, 'load_queue': load_queue,
             'dump_settings': dump_settings, 'load_settings': load_settings,
             'dump_fallbacks': dump_fallbacks, 'load_fallbacks': load_fallbacks, 'add_fallback': add_fallback,
             'delete': delete, 'role': role,
@@ -381,11 +367,23 @@ async def bot_help(ctx: Context):
 COMMANDS['help'] = bot_help
 
 
+async def process_spam(ctx: Context):
+    content = ctx.message.content
+    if not (('http://' in content or 'https://' in content) and ('disc' in content or 'disoc' in content) and
+            ('gift' in content or 'gft' in content)):
+        return
+    author: discord.User = ctx.message.author
+    server: discord.Guild = ctx.message.guild
+    await ctx.message.delete()
+    await server.kick(author, reason=f'Spam: {ctx.message.content}')
+
+
 async def process_message(ctx: Context):
     fn_name = ctx.message.content[1:]
 
     if ' ' in fn_name:
         fn_name = fn_name[:fn_name.find(' ')]
+    fire(ctx, process_spam(ctx))
 
     try:
         local_check(fn_name not in COMMANDS, "Unknown command")
@@ -402,6 +400,25 @@ async def process_message(ctx: Context):
             traceback.print_exc()
 
 
+def init_start(sources: dict, settings: dict):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    client = discord.Client()
+
+    @client.event
+    async def on_message(message: discord.Message):
+        return
+
+    @client.event
+    async def on_ready():
+        debug(f"GPT-3 Loop logged in as {client.user.name}")
+        start(Context(client, None, sources, settings, []))
+
+    loop.create_task(client.start(DISCORD_TOKEN))
+    loop.run_forever()
+    loop.close()
+
+
 def init(sources: dict, settings: dict):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -411,7 +428,7 @@ def init(sources: dict, settings: dict):
     async def on_message(message: discord.Message):
         ctx: Context = Context(client, message, sources, settings, [])
         fire(ctx, process_message(ctx))
-        # await await_ctx(ctx)
+        await await_ctx(ctx)
 
     @client.event
     async def on_ready():
@@ -423,10 +440,8 @@ def init(sources: dict, settings: dict):
                     APPROVAL_EMOJI = emoji
                 if emoji.name == DISAPPROVAL_EMOJI:
                     DISAPPROVAL_EMOJI = emoji
-            connection: discord_state.ConnectionState = client._connection
-            guild: discord.Guild = connection._get_guild(ALLOWED_GUILD)
-            CHANNEL = guild.get_channel(ALLOWED_CHANNEL)
-        debug(f"Instance logged in as {client.user.name}")
+            CHANNEL: discord.Guild = client.get_channel(ALLOWED_CHANNEL)
+        debug(f"Core logged in as {client.user.name}")
 
     loop.create_task(client.start(DISCORD_TOKEN))
     loop.run_forever()
@@ -442,6 +457,8 @@ def backup(sources):
 
 if __name__ == '__main__':
     manager = multiprocessing.Manager()
+    _workers = manager.list([])
+    _handled_messages = manager.dict({})
     _sources = manager.dict({})
     _gpt3 = manager.dict({})
     _bot = manager.dict({})
@@ -464,10 +481,11 @@ if __name__ == '__main__':
                  'max_synchronisation_delay_ms': 2000,
                  })
     _settings.update({'gpt3': _gpt3,
-                      'bot': _bot})
+                      'bot': _bot
+                      })
+
     procs = [multiprocessing.Process(target=init, args=(_sources, _settings), daemon=True),
-             multiprocessing.Process(target=backup, args=(_sources,), daemon=True)]
+             multiprocessing.Process(target=init_start, args=(_sources, _settings), daemon=True)]
     for t in procs:
         t.start()
-    for t in procs:
-        t.join()
+    backup(_sources)
