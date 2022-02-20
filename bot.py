@@ -411,7 +411,7 @@ def init_start(sources: dict, settings: dict):
     @client.event
     async def on_ready():
         debug(f"GPT-3 Loop logged in as {client.user.name}")
-        start(Context(client, None, sources, settings, []))
+        await start(Context(client, None, sources, settings, []))
 
     loop.create_task(client.start(DISCORD_TOKEN))
     loop.run_forever()
