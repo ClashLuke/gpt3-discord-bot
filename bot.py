@@ -191,6 +191,7 @@ async def add_fallback(ctx: Context):
 async def await_ctx(ctx: Context):
     for msg in ctx.fired_messages:
         await msg
+    ctx.fired_messages.clear()
 
 
 async def restart(ctx: Context):
@@ -300,6 +301,12 @@ async def start(ctx: Context):
     ctx.settings['bot']['started'] = 1
 
     while True:
+        min_ln = math.log(ctx.settings['bot']['min_response_time'])
+        max_ln = math.log(ctx.settings['bot']['max_response_time'])
+        delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
+        print(f"Next delay: {int(delay / 60):3d} minutes")
+        start_time = time.time()
+
         proposals = await eval_queue(ctx)
         if proposals:
             _, (count, _, _) = max(proposals.items(), key=lambda x: x[1][0])
@@ -327,11 +334,7 @@ async def start(ctx: Context):
         elif ctx.settings['bot']['show_empty']:
             fire(ctx, channel.send("No prompts in queue, skipping this one."))
 
-        min_ln = math.log(ctx.settings['bot']['min_response_time'])
-        max_ln = math.log(ctx.settings['bot']['max_response_time'])
-        delay = math.e ** (random.random() * (max_ln - min_ln) + min_ln)
-        print(f"Next delay: {int(delay / 60):3d} minutes")
-        start_time = time.time()
+        await await_ctx(ctx)
         time.sleep(delay + start_time - time.time())  # Ensure delay stays the same
 
 
