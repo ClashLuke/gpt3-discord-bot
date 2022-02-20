@@ -42,7 +42,6 @@ openai.organization = OPENAI_ORGANIZATION
 FALLBACKS = []
 CHANNEL: typing.Optional[discord.TextChannel] = None
 
-
 class ExitFunctionException(Exception):
     pass
 
