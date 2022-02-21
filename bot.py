@@ -42,6 +42,7 @@ openai.organization = OPENAI_ORGANIZATION
 FALLBACKS = []
 CHANNEL: typing.Optional[discord.TextChannel] = None
 
+
 class ExitFunctionException(Exception):
     pass
 
@@ -83,7 +84,6 @@ def local_check(check: bool, message: str):
 
 
 def call_gpt(prompt, settings):
-    debug(settings)
     return openai.Completion.create(prompt=prompt, **settings['gpt3'])['choices'][0]['text']
 
 
@@ -104,7 +104,7 @@ async def basic_check(ctx: Context, permission, dm=False):
 
 
 async def prune(ctx: Context):
-    channel: discord.TextChannel = ctx.message.guild.get_channel(SHITPOSTING_CHANNEL)
+    channel: discord.TextChannel = ctx.client.get_channel(SHITPOSTING_CHANNEL)
     async for msg in channel.history(limit=None,
                                      before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
         try:
@@ -402,7 +402,7 @@ async def process_message(ctx: Context):
             traceback.print_exc()
 
 
-def init_start(sources: dict, settings: dict):
+def init_fn(sources: dict, settings: dict, fn: typing.Union[start, prune]):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     client = discord.Client()
@@ -413,8 +413,17 @@ def init_start(sources: dict, settings: dict):
 
     @client.event
     async def on_ready():
-        debug(f"GPT-3 Loop logged in as {client.user.name}")
-        await start(Context(client, None, sources, settings, []))
+        global APPROVAL_EMOJI, DISAPPROVAL_EMOJI, CHANNEL
+        if isinstance(APPROVAL_EMOJI, str):
+            for emoji in client.emojis:
+                emoji: discord.Emoji = emoji
+                if emoji.name == APPROVAL_EMOJI:
+                    APPROVAL_EMOJI = emoji
+                if emoji.name == DISAPPROVAL_EMOJI:
+                    DISAPPROVAL_EMOJI = emoji
+            CHANNEL = client.get_channel(ALLOWED_CHANNEL)
+        debug(f"{fn.__name__} logged in as {client.user.name}")
+        await fn(Context(client, None, sources, settings, []))
 
     loop.create_task(client.start(DISCORD_TOKEN))
     loop.run_forever()
@@ -459,8 +468,6 @@ def backup(sources):
 
 if __name__ == '__main__':
     manager = multiprocessing.Manager()
-    _workers = manager.list([])
-    _handled_messages = manager.dict({})
     _sources = manager.dict({})
     _gpt3 = manager.dict({})
     _bot = manager.dict({})
@@ -474,7 +481,7 @@ if __name__ == '__main__':
                   'engine': "davinci"
                   })
     _bot.update({'min_response_time': 60,
-                 'max_response_time': 60 * 60 * 24,
+                 'max_response_time': 60,
                  "started": 0,
                  'min_score': 0,
                  'show_no_score': 0,
@@ -487,7 +494,8 @@ if __name__ == '__main__':
                       })
 
     procs = [multiprocessing.Process(target=init, args=(_sources, _settings), daemon=True),
-             multiprocessing.Process(target=init_start, args=(_sources, _settings), daemon=True)]
+             multiprocessing.Process(target=init_fn, args=(_sources, _settings, start), daemon=True),
+             multiprocessing.Process(target=init_fn, args=(_sources, _settings, prune), daemon=True)]
     for t in procs:
         t.start()
     backup(_sources)
