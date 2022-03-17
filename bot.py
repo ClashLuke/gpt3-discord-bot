@@ -18,20 +18,26 @@ import openai
 DISCORD_TOKEN = "XXXXXXXXXXXXXXXXXXXXXXXX.XXXXXX.XXXXXXXXXXXXXXX-XXXXXXXXXXX"  # Get one here: https://discord.com/developers/applications/
 OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # https://beta.openai.com/account/api-keys
 OPENAI_ORGANIZATION = "org-XXXXXXXXXXXXXXXXXXXXXXXX"
+SETTINGS = {'temperature': 0,
+                  'top_p': 1,
+                  'max_tokens': 256,
+                  'presence_penalty': 0.45,
+                  'frequency_penalty': 0.65,
+                  'best_of': 1,
+                  'engine': "davinci"
+                  }
 PREFIX = '.'
 CLEANUP = 60
 VERIFY_CHANNEL = 885760989608431636  # Yannic Kilcher "_verification"
 VERIFIED_ROLE = 821375158295592961  # Yannic Kilcher "verified"
-ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
-MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
-ALLOWED_GUILD = 714501525455634453  # Yannic Kilcher
+ALLOWED_CHANNEL = 953216859182866502  # Yannic Kilcher "gpt3"
+MESSAGE_CHANNEL = 953216859182866502  # Yannic Kilcher "bot-chat"
+ALLOWED_GUILD = 950816238882418728  # Yannic Kilcher
 SHITPOSTING_CHANNEL = 736963923521175612
 PRUNING_DAYS = 60
-ADMIN_USER = [690665848876171274, 191929809444667394, 699606075023949884]  # ClashLuke, XMaster, Yannic
-ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042823666171955,
-         'natural-language-processing': 762042825260007446, 'meetup': 782362139087208478,
-         'verified': 821375158295592961, 'homebrew-nlp': 911661603190079528,
-         'world-modelz': 914229949873913877}
+ADMIN_USER = [690665848876171274, 952850561340948541]  # ClashLuke, Endomorphosis 
+ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042823666171955, 'natural-language-processing': 762042825260007446, 'meetup': 782362139087208478, 'verified': 821375158295592961, 'homebrew-nlp': 911661603190079528, 'world-modelz': 914229949873913877 }
+
 APPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "yes"
 DISAPPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "noo"
 LOG_LEVEL = logging.DEBUG
@@ -82,10 +88,17 @@ def local_check(check: bool, message: str):
         debug(message)
         raise ExitFunctionException
 
+def detect_chinese(text):
+    for c in text:
+        if '\u4e00' <= c <= '\u9fff':
+            return True
+    return False
 
 def call_gpt(prompt, settings):
-    return openai.Completion.create(prompt=prompt, **settings['gpt3'])['choices'][0]['text']
-
+    #if detect_chinese(prompt):
+    #prompt = "Translate the following into English: \n'''" + prompt + "'''\n"
+    value = openai.Completion.create(prompt=prompt,  engine="text-davinci-001",  temperature=1,  max_tokens=1024,   top_p=1, frequency_penalty=0,  presence_penalty=0    )["choices"][0]["text"]
+    return (value)
 
 async def basic_check(ctx: Context, permission, dm=False):
     channel: discord.TextChannel = ctx.message.channel
@@ -95,7 +108,7 @@ async def basic_check(ctx: Context, permission, dm=False):
         guild: discord.Guild = channel.guild
         await discord_check(ctx, not channel.id == MESSAGE_CHANNEL or not guild.id == ALLOWED_GUILD,
                             "Insufficient permission. This bot can only be used in its dedicated channel on the "
-                            "\"Yannic Kilcher\" discord server.")
+                            "\"JusticeDAO\" discord server.")
     if permission:
         author: discord.User = ctx.message.author
         await discord_check(ctx, author.id not in ADMIN_USER,
@@ -112,13 +125,345 @@ async def prune(ctx: Context):
         except discord.errors.NotFound:
             break
 
+def detect_if_english_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a':
+            return True
+    return False
+
+def detect_if_chinese_text(text):
+    for c in text:
+        if '\u4e00' <= c <= '\u9fff':
+            return True
+    return False
+
+def detect_if_japanese_text(text):
+    for c in text:
+        if '\u3041' <= c <= '\u3096':
+            return True
+    return False
+
+def detect_if_korean_text(text):
+    for c in text:
+        if '\uac00' <= c <= '\ud7a3':
+            return True
+    return False
+
+def detect_if_arabic_text(text):
+    for c in text:
+        if '\u0600' <= c <= '\u06ff':
+            return True
+    return False
+
+def detect_if_portuguese_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' or '\u00c0' <= c <= '\u00ff':
+            return True
+    return False
+
+def detect_if_russian_text(text):
+    for c in text:
+        if '\u0400' <= c <= '\u04ff':
+            return True
+    return False
+
+def detect_if_spanish_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' or '\u00c0' <= c <= '\u00ff':
+            return True
+    return False
+
+def detect_if_french_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' or '\u00c0' <= c <= '\u00ff':
+            return True
+    return False
+
+def detect_if_italian_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' or '\u00c0' <= c <= '\u00ff':
+            return True
+    return False
+
+def detect_if_german_text(text):
+    for c in text:
+        if '\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' or '\u00c0' <= c <= '\u00ff':
+            return True
+    return False    
+
+
 
 async def complete(ctx: Context):
     channel: discord.TextChannel = ctx.message.channel
-    fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.",
-                           reference=ctx.message))
-    # await basic_check(message, True)
-    # await channel.send(call_gpt(message.content[len('.complete '):], settings))
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    await channel.send(call_gpt(ctx.message.content[len('.complete '):], settings))
+
+
+async def ko(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en coréen \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成韩语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на корейский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下を韓国語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in coreano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o coreano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze folgendes ins Koreanische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 한국어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al coreano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into korean \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+async def zh(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en chinois \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成中文 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на китайский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下を中国語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in cinese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o chinês \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Chinesische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 중국어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al chino \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into chinese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+
+
+async def es(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en espagnol \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成西班牙语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на испанский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をスペイン語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in spagnolo \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o espanhol \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Spanische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 스페인어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al español \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into spanish \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+async def pt(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en portugais \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成葡萄牙语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на португальский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をポルトガル語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in portoghese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o português \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Portugiesische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 포르투갈어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al portugués \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into portugese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+async def it(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en italien \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成意大利语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на итальянский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をイタリア語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in italiano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o italiano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Italienische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 이탈리아어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al italiano \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into italian \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+async def ja(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en japonais \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成日文 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на японский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下を日本語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in giapponese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o japonês\n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetzen Sie das Folgende ins Japanische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 일본어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al japonés \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into japanese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+
+    await channel.send(call_gpt(text, settings))
+
+async def en(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en anglais \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成英文 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на английский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下を英語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in inglese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o inglês \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetzen Sie das Folgende ins Englische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 영어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al ingles \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into english \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    await channel.send(call_gpt(text, settings))
+
+async def ru(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en russe \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成俄语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на русский язык \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をロシア語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in russo \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o russo \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetzen Sie das Folgende ins Russische \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 러시아어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al ruso \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into russian  \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+
+    await channel.send(call_gpt(text, settings))
+
+async def de(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en allemand \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成德语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на немецкий \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をドイツ語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in tedesco \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o alemão \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Deutsche \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 독일어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al alemán \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into german \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    await channel.send(call_gpt(text, settings))
+
+async def fr(ctx: Context):
+    channel: discord.TextChannel = ctx.message.channel
+    #fire(ctx, channel.send("This command is temporarily gone, but will be back in the future! Use .add instead.", reference=ctx.message))
+    #await basic_check(ctx, True)
+    if detect_if_french_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduisez ce qui suit en français\n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_chinese_text(ctx.message.content[len('.complete '):]):
+        text = '将以下内容翻译成法语 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_russian_text(ctx.message.content[len('.complete '):]):
+        text = 'Переведите следующее на французский \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_japanese_text(ctx.message.content[len('.complete '):]):
+        text = '以下をフランス語に翻訳する \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_italian_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduci quanto segue in francese \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_portuguese_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduza o seguinte para o francês\n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_german_text(ctx.message.content[len('.complete '):]):
+        text = 'Übersetze das Folgende ins Französische\n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_korean_text(ctx.message.content[len('.complete '):]):
+        text = '다음을 프랑스어로 번역 \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    if detect_if_spanish_text(ctx.message.content[len('.complete '):]):
+        text = 'Traduce lo siguiente al francés \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n' 
+    if detect_if_english_text(ctx.message.content[len('.complete '):]):
+        text = 'Translate the following into french \n """' + ctx.message.content[len('.complete '):] + '"""' + '\n'
+    await channel.send(call_gpt(text, settings))
+
 
 
 async def verify(ctx: Context):
@@ -353,11 +698,12 @@ async def change_setting(ctx: Context):
 
 
 COMMANDS = {'change_setting': change_setting, 'settings': settings, 'add': add, 'complete': complete,
-            'queue': queue, 'dump_queue': dump_queue, 'load_queue': load_queue,
+        'queue': queue, 'dump_queue': dump_queue, 'load_queue': load_queue,
             'dump_settings': dump_settings, 'load_settings': load_settings,
             'dump_fallbacks': dump_fallbacks, 'load_fallbacks': load_fallbacks, 'add_fallback': add_fallback,
             'delete': delete, 'role': role,
-            'restart': restart, 'verify': verify
+            'restart': restart, 'verify': verify,
+            'en': en, 'ru': ru, 'de': de, 'fr': fr, 'es': es, 'it': it, 'pt': pt, 'ja': ja, 'ko': ko, 'zh': zh
             }
 
 
