@@ -474,7 +474,7 @@ def start_prune(channel_id: int, delay_days: int):
 
         ctx: Context = Context(client, None, {}, {}, [])
         while True:
-            fire(ctx, prune(ctx, channel_id), delay_days)
+            fire(ctx, prune(ctx, channel_id, delay_days))
             await await_ctx(ctx)
 
     loop.create_task(client.start(DISCORD_TOKEN))
