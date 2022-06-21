@@ -25,13 +25,17 @@ VERIFIED_ROLE = 821375158295592961  # Yannic Kilcher "verified"
 ALLOWED_CHANNEL = 800329398691430441  # Yannic Kilcher "gpt3"
 MESSAGE_CHANNEL = 760062431858262066  # Yannic Kilcher "bot-chat"
 ALLOWED_GUILD = 714501525455634453  # Yannic Kilcher
-SHITPOSTING_CHANNEL = 736963923521175612
-PRUNING_DAYS = 60
+PRUNED_CHANNELS = [(736963923521175612, 30),  # shitposting - 30 days
+                   (986699377257119794, 180),  # general - 6 months
+                   (986699973800390677, 180),  # random - 6 months
+                   (986700814938697728, 180),  # text-for-voice - 3 months
+                   ]
 ADMIN_USER = [690665848876171274, 191929809444667394, 699606075023949884]  # ClashLuke, XMaster, Yannic
 ROLES = {'reinforcement-learning': 760062682693894144, 'computer-vision': 762042823666171955,
          'natural-language-processing': 762042825260007446, 'meetup': 782362139087208478,
          'verified': 821375158295592961, 'homebrew-nlp': 911661603190079528,
-         'world-modelz': 914229949873913877}
+         'world-modelz': 914229949873913877
+         }
 APPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "yes"
 DISAPPROVAL_EMOJI: typing.Union[str, discord.Emoji] = "noo"
 LOG_LEVEL = logging.DEBUG
@@ -103,10 +107,10 @@ async def basic_check(ctx: Context, permission, dm=False):
                             "Try .add instead")
 
 
-async def prune(ctx: Context):
-    channel: discord.TextChannel = ctx.client.get_channel(SHITPOSTING_CHANNEL)
+async def prune(ctx: Context, channel_id: int, delay_days: int):
+    channel: discord.TextChannel = ctx.client.get_channel(channel_id)
     async for msg in channel.history(limit=None,
-                                     before=datetime.datetime.now() - datetime.timedelta(days=PRUNING_DAYS)):
+                                     before=datetime.datetime.now() - datetime.timedelta(days=delay_days)):
         try:
             fire(ctx, msg.delete())
         except discord.errors.NotFound:
@@ -459,6 +463,25 @@ def init(sources: dict, settings: dict):
     loop.close()
 
 
+def start_prune(channel_id: int, delay_days: int):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    client = discord.Client()
+
+    @client.event
+    async def on_ready():
+        debug(f"Pruner for {channel_id} logged in as {client.user.name}")
+
+        ctx: Context = Context(client, None, {}, {}, [])
+        while True:
+            fire(ctx, prune(ctx, channel_id), delay_days)
+            await await_ctx(ctx)
+
+    loop.create_task(client.start(DISCORD_TOKEN))
+    loop.run_forever()
+    loop.close()
+
+
 def backup(sources):
     while True:
         with open("queue_dump.json", 'w') as f:
@@ -481,7 +504,7 @@ if __name__ == '__main__':
                   'engine': "davinci"
                   })
     _bot.update({'min_response_time': 60,
-                 'max_response_time': 60,
+                 'max_response_time': 60 * 60 * 8,
                  "started": 0,
                  'min_score': 0,
                  'show_no_score': 0,
@@ -496,6 +519,8 @@ if __name__ == '__main__':
     procs = [multiprocessing.Process(target=init, args=(_sources, _settings), daemon=True),
              multiprocessing.Process(target=init_fn, args=(_sources, _settings, start), daemon=True),
              multiprocessing.Process(target=init_fn, args=(_sources, _settings, prune), daemon=True)]
+    procs.extend([multiprocessing.Process(target=start_prune, args=(channel_id, delay_days), daemon=True)
+                  for channel_id, delay_days in PRUNED_CHANNELS])
     for t in procs:
         t.start()
     backup(_sources)
