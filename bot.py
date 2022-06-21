@@ -463,25 +463,6 @@ def init(sources: dict, settings: dict):
     loop.close()
 
 
-def start_prune(channel_id: int, delay_days: int):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    client = discord.Client()
-
-    @client.event
-    async def on_ready():
-        debug(f"Pruner for {channel_id} logged in as {client.user.name}")
-
-        ctx: Context = Context(client, None, {}, {}, [])
-        while True:
-            fire(ctx, prune(ctx, channel_id, delay_days))
-            await await_ctx(ctx)
-
-    loop.create_task(client.start(DISCORD_TOKEN))
-    loop.run_forever()
-    loop.close()
-
-
 def backup(sources):
     while True:
         with open("queue_dump.json", 'w') as f:
@@ -517,9 +498,10 @@ if __name__ == '__main__':
                       })
 
     procs = [multiprocessing.Process(target=init, args=(_sources, _settings), daemon=True),
-             multiprocessing.Process(target=init_fn, args=(_sources, _settings, start), daemon=True),
-             multiprocessing.Process(target=init_fn, args=(_sources, _settings, prune), daemon=True)]
-    procs.extend([multiprocessing.Process(target=start_prune, args=(channel_id, delay_days), daemon=True)
+             multiprocessing.Process(target=init_fn, args=(_sources, _settings, start), daemon=True)]
+    procs.extend([multiprocessing.Process(target=init_fn,
+                                          args=(_sources, _settings, lambda x: prune(x, channel_id, delay_days)),
+                                          daemon=True)
                   for channel_id, delay_days in PRUNED_CHANNELS])
     for t in procs:
         t.start()
